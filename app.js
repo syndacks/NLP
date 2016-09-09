@@ -1,29 +1,87 @@
 var request = require("request");
 var cheerio = require("cheerio"); 
 var natural = require("natural");
+var fs = require("fs");
+var articleList = require("./articleList2");
+var csvWriter = require('csv-write-stream');
 
-//scrape Wikipedia Article (Theme) and retrieve all links
-themeURL = "https://en.wikipedia.org/wiki/Jazz";
 
-request(themeURL, function(error, response, body){
-	if(!error){
-		var $ = cheerio.load(body);
-
-      $('#mw-content-text a').each(function() {
-        var text = $(this).text();
-        var link = "http:/en.wikipedia.org"+$(this).attr('href');
-		console.log(text + ": " + link);
-		})
-	}
-});
-
+//scrape Wikipedia Article (Theme) and retrieve all links from body
+function themeScrape(){
+	themeURL = "https://en.wikipedia.org/wiki/Rock_music";
+	request(themeURL, function(error, response, body){
+		if(!error){
+			var $ = cheerio.load(body);
+	      $('#mw-content-text a').each(function() {
+	        var link = '"http://en.wikipedia.org'+$(this).attr('href')+'",';
+			console.log(link);
+			})
+		}
+	});
+}
+// themeScrape();
 
 
 
 //scrape Wikipedia Article by passing in URL
-articleUrl = "https://en.wikipedia.org/wiki/Louis_Armstrong";
+function aylien(article, callback){
+	//request Wiki Article
+	request(article, function(error, response, body) {
+	  if (!error) {
+	  	//scrape body content from the wiki article and place in articleBody
+	    var $ = cheerio.load(body),
+	      articleBody = $("#mw-content-text").text();
+	      //tokenize (split all the words from articleBody into individual words or "tokens")
+	      tokenizer = new natural.WordTokenizer();
+	      tokenized_articleBody = (tokenizer.tokenize(articleBody));
+	      //set up Terf Frequency-Inverse Document Frequency (tf-idf)
+	      //use this to determine how important a word (or words) is to a document relative to a corpus. 
+	      var TfIdf = natural.TfIdf;
+	      var tfidf = new TfIdf();
+	      //load tfidf 'addDocument' with the tokenized_articleBody terms
+	      tfidf.addDocument(tokenized_articleBody);
 
-function aylien(criteria){
+	      //set the criteria terms you want to rank with
+	      var criteria_terms = ['genre', 'band', 'instrument', 'song', 'geography']
+	      
+	      //run the magic
+	      var numCompletedNLPs = 0;
+	      var scores = {};
+	      for(i=0; i<criteria_terms.length; i++){
+		      var currentWord = criteria_terms[i]
+		      tfidf.tfidfs(currentWord, function(x, measure){
+		      	numCompletedNLPs++;
+		      	// scores['genre'] = 0.92;
+		      	scores[currentWord] = measure;
+
+		      	// if we've completed the async work for all the words, callback
+		      	if (numCompletedNLPs === criteria_terms.length)
+		      		callback(article, scores)
+		      });
+	  	  }
+	  } 
+	});
+}
+
+for(x=0; x<150; x++){
+	aylien(articleList[x], function (url, scores) {
+		console.log(url, scores);
+	});
+};
+
+
+// wikiArray = ['http://en.wikipedia.org/wiki/Jazz_poetry', 'http://en.wikipedia.org/wiki/Nu_jazz', 'http://en.wikipedia.org/wiki/Spy_vs_Spy_(album)']
+
+// for(x=0; x<wikiArray.length; x++){
+// 	aylien(wikiArray[x]);
+// };
+
+
+
+
+//scrape Wikipedia Article by passing in the criteria
+function aylienByCriteria(criteria){
+	articleUrl = "https://en.wikipedia.org/wiki/Louis_Armstrong";
 	//request Wiki Article
 	request(articleUrl, function(error, response, body) {
 	  if (!error) {
@@ -50,14 +108,10 @@ function aylien(criteria){
 
 var criteria_terms = ['genre', 'musician', 'instrument', 'deadmau5', 'jazz', 'Armstrong']
 
+//Use this for loop to kick off the above function
 // for(i=0; i<criteria_terms.length; i++){
-// 	aylien(criteria_terms[i]);
+// 	aylienByCriteria(criteria_terms[i]);
 // };
-
-
-
-
-
 
 
 
